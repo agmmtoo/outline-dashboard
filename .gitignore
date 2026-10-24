@@ -16,3 +16,8 @@ build/
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Agent skills (installed locally, not part of this project)
+.agents/
+.agent/
+skills-lock.json
