@@ -1,0 +1,13 @@
+# Copy to .dev.vars for local development. Never commit .dev.vars.
+# JSON array of servers. "headers" is optional (Access service token or Caddy proxy token).
+# "lightsail" is optional and enables the Reboot instance button for that server.
+OUTLINE_SERVERS='[{"id":"sg1","name":"Singapore 1","apiUrl":"https://outline-sg1.example.com/SECRET_PATH","headers":{"CF-Access-Client-Id":"...","CF-Access-Client-Secret":"..."},"lightsail":{"region":"ap-southeast-1","instanceName":"outline-sg1"}}]'
+# Least-privilege IAM user from infra/terraform/lightsail-reboot-iam (only needed for reboot).
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+# Dynamic (ssconf://) links. Locally the config endpoint is served by this same worker.
+# Generate the secret with: openssl rand -base64 48
+DYNAMIC_KEY_BASE_URL=http://127.0.0.1:8787
+DYNAMIC_KEY_SECRET=
+# Skips Cloudflare Access verification, but only for requests to localhost.
+DEV_ALLOW_LOCAL=true

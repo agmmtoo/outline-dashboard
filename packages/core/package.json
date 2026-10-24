@@ -1,0 +1,17 @@
+{
+  "name": "@outline-dash/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./format": "./src/format.ts",
+    "./key-meta": "./src/key-meta.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@outline-dash/outline-client": "workspace:*"
+  }
+}

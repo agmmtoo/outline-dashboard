@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "outline-dashboard",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  // The web app is a static SPA; this Worker serves its build and handles /api/*.
+  // Same origin means no CORS and one Cloudflare Access application covers both.
+  "assets": {
+    "directory": "../web/build/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // The Worker routes every request: /api/* (dashboard API), /c/* (public
+    // dynamic key configs) and the config hostname, which must not serve the SPA.
+    "run_worker_first": true
+  },
+  "vars": {
+    // Your Zero Trust team domain, e.g. "yourteam.cloudflareaccess.com".
+    "ACCESS_TEAM_DOMAIN": "",
+    // Comma-separated emails allowed in addition to the Access policy (optional).
+    "ACCESS_ALLOWED_EMAILS": "",
+    // Public host for dynamic (ssconf://) key configs. Keep it separate from the
+    // dashboard hostname and outside Cloudflare Access.
+    "DYNAMIC_KEY_BASE_URL": "https://outline.librarease.org"
+  }
+  // Secrets (wrangler secret put): OUTLINE_SERVERS, ACCESS_AUD,
+  // DYNAMIC_KEY_SECRET (32+ random chars), and for the reboot button:
+  // AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+}

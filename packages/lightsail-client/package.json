@@ -1,0 +1,14 @@
+{
+  "name": "@outline-dash/lightsail-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  }
+}

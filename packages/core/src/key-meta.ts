@@ -1,0 +1,75 @@
+// Outline has no fields for owner, expiry or a disabled flag, so we keep that
+// metadata inside the key name itself, as " | "-separated segments:
+//
+//   "Aung | plus | exp:2026-12-31 | dyn:k3v9x2m7q4tp | off:50000000000"
+//
+// - first segment: human label
+// - "exp:YYYY-MM-DD": expiry date (inclusive)
+// - "dyn:<handle>": dynamic access key handle; follows the key across rotate and move
+// - "off:<bytes>|none": key is soft-disabled; value is the limit to restore
+// - anything else: free-form tag
+
+const SEP = " | ";
+const EXP_RE = /^exp:(\d{4}-\d{2}-\d{2})$/;
+const OFF_RE = /^off:(none|\d+)$/;
+const DYN_RE = /^dyn:([a-z2-7]{12,32})$/;
+const HANDLE_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+
+export interface KeyMeta {
+  label: string;
+  tags: string[];
+  expires: string | null;
+  /** Dynamic access key handle, when the key has a dynamic (ssconf://) link. */
+  dynamic: string | null;
+  /** Present only when soft-disabled. `null` means "no per-key limit" before disabling. */
+  disabled: { previousLimitBytes: number | null } | null;
+}
+
+export function parseKeyName(name: string): KeyMeta {
+  const meta: KeyMeta = { label: "", tags: [], expires: null, dynamic: null, disabled: null };
+  const segments = name.split("|").map((s) => s.trim()).filter(Boolean);
+
+  segments.forEach((segment, i) => {
+    const exp = EXP_RE.exec(segment);
+    if (exp) {
+      meta.expires = exp[1]!;
+      return;
+    }
+    const dyn = DYN_RE.exec(segment);
+    if (dyn) {
+      meta.dynamic = dyn[1]!;
+      return;
+    }
+    const off = OFF_RE.exec(segment);
+    if (off) {
+      meta.disabled = { previousLimitBytes: off[1] === "none" ? null : Number(off[1]) };
+      return;
+    }
+    if (i === 0) meta.label = segment;
+    else meta.tags.push(segment);
+  });
+
+  return meta;
+}
+
+export function formatKeyName(meta: KeyMeta): string {
+  // "|" inside a label or tag would corrupt parsing.
+  const clean = (s: string) => s.replaceAll("|", "/").trim();
+  const segments = [clean(meta.label) || "Unnamed", ...meta.tags.map(clean).filter(Boolean)];
+  if (meta.expires) segments.push(`exp:${meta.expires}`);
+  if (meta.dynamic) segments.push(`dyn:${meta.dynamic}`);
+  if (meta.disabled) segments.push(`off:${meta.disabled.previousLimitBytes ?? "none"}`);
+  return segments.join(SEP);
+}
+
+export function isExpired(expires: string | null, now = new Date()): boolean {
+  if (!expires) return false;
+  // Expiry date is inclusive: the key is valid through the end of that day (UTC).
+  return now.toISOString().slice(0, 10) > expires;
+}
+
+/** Random 16-character base32 handle (80 bits). */
+export function newDynamicHandle(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => HANDLE_ALPHABET[b & 31]).join("");
+}

@@ -2,28 +2,14 @@
   "name": "outline-dashboard",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "build": "react-router build",
-    "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
-  },
-  "dependencies": {
-    "@react-router/node": "^8.5.0",
-    "@react-router/serve": "^8.5.0",
-    "isbot": "^5.1.36",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router": "^8.5.0"
+    "dev": "pnpm --parallel --filter @outline-dash/api --filter @outline-dash/web dev",
+    "build": "pnpm --filter @outline-dash/web build",
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "pnpm build && pnpm --filter @outline-dash/api run deploy"
   },
   "devDependencies": {
-    "@react-router/dev": "^8.5.0",
-    "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^22",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.3"
+    "typescript": "^5.9.3"
   }
 }

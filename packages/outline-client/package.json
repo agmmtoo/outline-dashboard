@@ -1,0 +1,11 @@
+{
+  "name": "@outline-dash/outline-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}
