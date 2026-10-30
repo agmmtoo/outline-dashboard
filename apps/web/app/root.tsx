@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "./components/ui/skeleton";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { signedOutPath } from "./lib/admin-device";
 import { api, ApiError } from "./lib/api";
 import { authStatusQuery, queryClient } from "./lib/query";
 import { cn } from "./lib/utils";
@@ -198,8 +199,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   } else if (error instanceof ApiError) {
     if (error.status === 401) {
       const here = typeof window === "undefined" ? "/" : window.location.pathname + window.location.search;
-      const to = here.startsWith("/login") ? here : `/login?next=${encodeURIComponent(here)}`;
-      return <Navigate to={to} replace />;
+      return <Navigate to={signedOutPath(here)} replace />;
     }
     const unauth = error.status === 403;
     message = unauth ? "Not signed in" : "API error";

@@ -3,11 +3,10 @@ import type { KeyView, ServerInsights } from "@outline-dash/core/types";
 import { FlaskConicalIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { LocationsChart } from "./locations-chart";
 import { TrafficTreemap } from "./traffic-treemap";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 export function InsightsPanel({ keys, insights }: { keys: KeyView[]; insights: ServerInsights }) {
-  const totalLocationBytes = insights.locations.reduce((n, l) => n + l.bytes, 0) || 1;
 
   return (
     <div className="space-y-4">
@@ -48,34 +47,13 @@ export function InsightsPanel({ keys, insights }: { keys: KeyView[]; insights: S
       <Card>
         <CardHeader>
           <CardTitle>Client locations</CardTitle>
-          <CardDescription>Where connections come from, by traffic</CardDescription>
+          <CardDescription>Where connections come from, by traffic over the last 30 days. Hover a bar for the breakdown.</CardDescription>
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent>
           {insights.locations.length === 0 ? (
-            <p className="px-4 text-muted-foreground">No location data.</p>
+            <p className="text-muted-foreground">No location data.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Location</TableHead>
-                  <TableHead>Network</TableHead>
-                  <TableHead className="text-right">Data</TableHead>
-                  <TableHead className="pr-4 text-right">Share</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {insights.locations.map((l, i) => (
-                  <TableRow key={`${l.location}-${l.asOrg}-${i}`}>
-                    <TableCell className="pl-4 font-medium">{l.location || "Unknown"}</TableCell>
-                    <TableCell className="max-w-40 truncate text-muted-foreground">{l.asOrg ?? "-"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatBytes(l.bytes)}</TableCell>
-                    <TableCell className="pr-4 text-right tabular-nums">
-                      {((l.bytes / totalLocationBytes) * 100).toFixed(1)}%
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <LocationsChart locations={insights.locations} />
           )}
         </CardContent>
       </Card>

@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { rememberAdminDevice } from "~/lib/admin-device";
 import { api, ApiError } from "~/lib/api";
 import { authStatusQuery, queryClient } from "~/lib/query";
 import type { Route } from "./+types/login";
@@ -39,6 +40,8 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   } catch (err) {
     return { error: err instanceof ApiError ? err.message : "Sign-in failed" };
   }
+  // Next time this browser is signed out, send it here rather than to the public check.
+  rememberAdminDevice();
   // Drop anything cached from before the session expired.
   queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
   return redirect(safeNext(new URL(request.url)));

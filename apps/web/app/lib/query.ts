@@ -1,6 +1,7 @@
 import type { InstanceStateView, ServerKeysResponse, ServerSummary } from "@outline-dash/core/types";
 import { QueryCache, QueryClient, queryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { signedOutPath } from "./admin-device";
 import { api, ApiError } from "./api";
 
 /**
@@ -15,8 +16,7 @@ export const queryClient = new QueryClient({
     onError: (err, query) => {
       if (query.state.data === undefined || query.meta?.silent) return;
       if (err instanceof ApiError && err.status === 401) {
-        const here = window.location.pathname + window.location.search;
-        return window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+        return window.location.assign(signedOutPath(window.location.pathname + window.location.search));
       }
       toast.error(`Refresh failed: ${err.message}`);
     },
