@@ -1,5 +1,5 @@
 import { formatBytes, gbToBytes } from "@outline-dash/core/format";
-import { parseKeyName } from "@outline-dash/core/key-meta";
+import { formatLookupCode, parseKeyName } from "@outline-dash/core/key-meta";
 import type { ServerView } from "@outline-dash/core/types";
 import { CopyIcon, DownloadIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -68,9 +68,9 @@ function CreateKeyBody({
 
   if (result?.ok && result.created) {
     const rows = result.created.map((k) => {
-      const label = parseKeyName(k.name).label;
-      const link = shareableLink({ ...k, label });
-      return { id: k.id, label, link: link.url, shareable: link };
+      const { label, code } = parseKeyName(k.name);
+      const link = shareableLink({ ...k, label, lookupCode: code });
+      return { id: k.id, label, code: code ? formatLookupCode(code) : "", link: link.url, shareable: link };
     });
     const single = rows.length === 1 ? rows[0] : undefined;
     return (
@@ -108,7 +108,7 @@ function CreateKeyBody({
               <Button
                 variant="outline"
                 onClick={() =>
-                  downloadCsv(`${server.name}-keys.csv`, [["id", "name", "access_url"], ...rows.map((r) => [r.id, r.label, r.link])])
+                  downloadCsv(`${server.name}-keys.csv`, [["id", "name", "check_code", "access_url"], ...rows.map((r) => [r.id, r.label, r.code, r.link])])
                 }
               >
                 <DownloadIcon />

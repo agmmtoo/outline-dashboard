@@ -4,7 +4,7 @@ import type {
   OutlineClient,
   ServerInfo,
 } from "@outline-dash/outline-client";
-import { formatKeyName, isExpired, newDynamicHandle, parseKeyName, type KeyMeta } from "./key-meta";
+import { formatKeyName, isExpired, newDynamicHandle, newLookupCode, parseKeyName, type KeyMeta } from "./key-meta";
 import type {
   CreateKeysRequest,
   KeyStatus,
@@ -72,6 +72,7 @@ export function toKeyView(
     expires: meta.expires,
     disabled: meta.disabled != null,
     dynamicHandle: meta.dynamic,
+    lookupCode: meta.code,
     dynamicUrl: null,
     port: key.port,
     method: key.method,
@@ -170,6 +171,7 @@ export async function createKeys(client: OutlineClient, req: CreateKeysRequest):
       expires: req.expires ?? null,
       dynamic: req.dynamic ? newDynamicHandle() : null,
       disabled: null,
+      code: newLookupCode(),
     });
     created.push(
       await client.createAccessKey({
@@ -235,6 +237,25 @@ export async function enableKey(client: OutlineClient, keyId: string) {
   if (previous == null) await client.removeAccessKeyDataLimit(keyId);
   else await client.setAccessKeyDataLimit(keyId, previous);
   await client.renameAccessKey(keyId, formatKeyName({ ...meta, disabled: null }));
+}
+
+/** Gives the key a new lookup code (or its first one). The previous code stops working. */
+export async function resetLookupCode(client: OutlineClient, keyId: string) {
+  const { meta } = await loadKey(client, keyId);
+  await client.renameAccessKey(keyId, formatKeyName({ ...meta, code: newLookupCode() }));
+}
+
+/**
+ * Adds lookup codes to keys made before codes existed. Capped per call to stay
+ * under the Workers subrequest limit; call again while `remaining` > 0.
+ */
+export async function addMissingLookupCodes(client: OutlineClient, max = MAX_BULK_CREATE) {
+  const missing = (await client.listAccessKeys()).filter((k) => !parseKeyName(k.name ?? "").code);
+  const batch = missing.slice(0, max);
+  for (const k of batch) {
+    await client.renameAccessKey(k.id, formatKeyName({ ...parseKeyName(k.name ?? ""), code: newLookupCode() }));
+  }
+  return { updated: batch.length, remaining: missing.length - batch.length };
 }
 
 /**

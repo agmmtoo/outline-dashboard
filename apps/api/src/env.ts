@@ -25,6 +25,8 @@ export interface Bindings {
   DYNAMIC_KEY_BASE_URL?: string;
   /** Secret. HMAC key for dynamic key tokens; rotating it invalidates every dynamic link. */
   DYNAMIC_KEY_SECRET?: string;
+  /** Rate limit for the public /check lookup. Optional: lookups still work without it. */
+  CHECK_LIMITER?: RateLimit;
   ASSETS: Fetcher;
 }
 

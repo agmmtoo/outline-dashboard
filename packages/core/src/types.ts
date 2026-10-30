@@ -13,6 +13,8 @@ export interface KeyView {
   disabled: boolean;
   /** Dynamic access key handle; null when the key only has a static ss:// link. */
   dynamicHandle: string | null;
+  /** Code the key's user enters on the public /check page; null for keys made before codes existed. */
+  lookupCode: string | null;
   /** ssconf:// link, filled in by the API when dynamic keys are configured. */
   dynamicUrl: string | null;
   port: number;
@@ -116,4 +118,13 @@ export interface CreatedKeyView {
   name: string;
   accessUrl: string;
   dynamicUrl: string | null;
+}
+
+/** What the public /check page shows for one key. Deliberately minimal: no server or link details. */
+export interface KeyCheckView {
+  label: string;
+  status: KeyStatus;
+  usedBytes: number;
+  limitBytes: number | null;
+  expires: string | null;
 }

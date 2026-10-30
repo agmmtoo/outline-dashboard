@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import {
+  addMissingLookupCodes,
   createKeys,
   disableKey,
+  displayName,
   enableKey,
   dynamicUrl,
   getServerKeys,
@@ -10,6 +12,7 @@ import {
   parseKeyName,
   renewKey,
   resetDynamicHandle,
+  resetLookupCode,
   rotateKey,
   signDynamicToken,
   setKeyLimit,
@@ -53,7 +56,7 @@ async function linkFor(env: AppEnv["Bindings"], name: string) {
   const dyn = dynamicKeysConfig(env);
   const meta = parseKeyName(name);
   if (!dyn || !meta.dynamic) return null;
-  return dynamicUrl(dyn.baseUrl, await signDynamicToken(dyn.secret, meta.dynamic), meta.label);
+  return dynamicUrl(dyn.baseUrl, await signDynamicToken(dyn.secret, meta.dynamic), displayName(meta));
 }
 
 async function createdView(env: AppEnv["Bindings"], k: AccessKey): Promise<CreatedKeyView> {
@@ -216,6 +219,17 @@ export const servers = new Hono<AppEnv>()
     const { client } = serverOr404(c.env, c.req.param("sid"));
     await resetDynamicHandle(client, c.req.param("kid"));
     return c.body(null, 204);
+  })
+
+  .post("/:sid/keys/:kid/code", async (c) => {
+    const { client } = serverOr404(c.env, c.req.param("sid"));
+    await resetLookupCode(client, c.req.param("kid"));
+    return c.body(null, 204);
+  })
+
+  .post("/:sid/lookup-codes", async (c) => {
+    const { client } = serverOr404(c.env, c.req.param("sid"));
+    return c.json(await addMissingLookupCodes(client));
   })
 
   .post("/:sid/keys/:kid/move", json(z.object({ to: z.string().min(1) })), async (c) => {

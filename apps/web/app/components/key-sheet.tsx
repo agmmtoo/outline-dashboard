@@ -1,12 +1,23 @@
 import { formatBytes, formatRelative, GB, gbToBytes } from "@outline-dash/core/format";
+import { formatLookupCode } from "@outline-dash/core/key-meta";
 import type { KeyView, ServerView } from "@outline-dash/core/types";
-import { ArrowRightIcon, ArrowRightLeftIcon, Link2Icon, RefreshCcwIcon, RotateCwIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  ArrowRightLeftIcon,
+  CopyIcon,
+  Link2Icon,
+  MessageSquareTextIcon,
+  RefreshCcwIcon,
+  RotateCwIcon,
+  Trash2Icon,
+  UndoIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { parseGb, splitTags, type Payload } from "~/lib/actions";
 import { GRACE_MS } from "~/lib/pending";
 import { maskAccessUrl, shareableLink, shareUrl } from "~/lib/browser";
 import { cn } from "~/lib/utils";
-import { AccessLink } from "./access-link";
+import { AccessLink, useCopy } from "./access-link";
 import type { KeyActions } from "./keys-panel";
 import { PendingRow, usePendingFor } from "./pending-bar";
 import { StatusBadge, UsageRing } from "./status";
@@ -118,7 +129,66 @@ function KeySheetBody(props: Props) {
   );
 }
 
-function ShareTab({ k, actions, dynamicKeys }: Props) {
+function ShareTab(props: Props) {
+  return (
+    <div className="space-y-6">
+      <LinkSection {...props} />
+      <CheckCodeSection {...props} />
+    </div>
+  );
+}
+
+/** The code the key's user enters on the public /check page to see their usage. */
+function CheckCodeSection({ k, actions }: Props) {
+  const { copy } = useCopy();
+  const checkUrl = typeof window === "undefined" ? "/check" : `${window.location.origin}/check`;
+  const code = k.lookupCode ? formatLookupCode(k.lookupCode) : null;
+  return (
+    <Section
+      title="Usage check code"
+      description="The key's user enters this code on the public check page to see their usage and limit. It's also shown next to the key's name in the Outline app."
+    >
+      {code ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="border bg-muted/40 px-3 py-1.5 font-mono text-sm tracking-widest">{code}</code>
+          <Button variant="outline" size="sm" onClick={() => copy(code, "Code copied")}>
+            <CopyIcon />
+            Copy code
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => copy(`Check your data usage at ${checkUrl} with code ${code}`, "Message copied")}
+          >
+            <MessageSquareTextIcon />
+            Copy message for user
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            disabled={actions.busy}
+            onClick={() => actions.submit({ intent: "code", keyId: k.id })}
+          >
+            <RefreshCcwIcon />
+            New code
+          </Button>
+        </div>
+      ) : (
+        <Button variant="outline" disabled={actions.busy} onClick={() => actions.submit({ intent: "code", keyId: k.id })}>
+          Create code
+        </Button>
+      )}
+      {code && (
+        <p className="text-xs text-muted-foreground">
+          A new code replaces this one. The name in the user's Outline app only updates when they import the link again.
+        </p>
+      )}
+    </Section>
+  );
+}
+
+function LinkSection({ k, actions, dynamicKeys }: Props) {
   const [showStatic, setShowStatic] = useState(false);
   return (
     <Section
@@ -136,7 +206,9 @@ function ShareTab({ k, actions, dynamicKeys }: Props) {
             {showStatic ? "Hide" : "Show"} static ss:// link
           </Button>
           {showStatic && (
-            <AccessLink link={{ url: shareUrl(k.accessUrl, k.label), masked: maskAccessUrl(k.accessUrl), dynamic: false }} />
+            <AccessLink
+              link={{ url: shareUrl(k.accessUrl, k.label, k.lookupCode), masked: maskAccessUrl(k.accessUrl), dynamic: false }}
+            />
           )}
         </div>
       )}

@@ -11,10 +11,12 @@ import {
   RotateCwIcon,
   SearchIcon,
   SlidersHorizontalIcon,
+  TicketIcon,
   Trash2Icon,
   ZapIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { inverseOf, useAction, type CreatedKey, type Payload } from "~/lib/actions";
 import { shareableLink } from "~/lib/browser";
 import { usePendingActions } from "~/lib/pending";
@@ -24,6 +26,7 @@ import { CreateKeyDialog } from "./create-key-dialog";
 import { KeySheet } from "./key-sheet";
 import { STATUS_ORDER, StatusBadge, StatusDot, statusDotClass, statusLabel, UsageRing } from "./status";
 import { cn } from "~/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -218,6 +221,8 @@ export function KeysPanel({
         </Button>
       </div>
 
+      <MissingCodes count={keys.filter((k) => !k.lookupCode).length} />
+
       {keys.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -333,7 +338,11 @@ export function KeysPanel({
           </DialogHeader>
           {replaced && (
             <AccessLink
-              link={shareableLink({ ...replaced.key, label: parseKeyName(replaced.key.name).label })}
+              link={shareableLink({
+                ...replaced.key,
+                label: parseKeyName(replaced.key.name).label,
+                lookupCode: parseKeyName(replaced.key.name).code,
+              })}
               revealed
             />
           )}
@@ -342,6 +351,37 @@ export function KeysPanel({
 
       <ConfirmDialog request={actions.confirm} onClose={() => actions.setConfirm(null)} />
     </div>
+  );
+}
+
+/** Offers to give older keys a usage check code; hidden once every key has one. */
+function MissingCodes({ count }: { count: number }) {
+  const action = useAction({ silentSuccess: true });
+  const result = action.result;
+  useEffect(() => {
+    if (result?.ok && result.codes) {
+      const { updated, remaining } = result.codes;
+      toast.success(
+        remaining > 0
+          ? `Added codes to ${updated} keys. Run it again for the other ${remaining}.`
+          : `Added codes to ${updated} keys`,
+      );
+    }
+  }, [result]);
+  if (count === 0) return null;
+  return (
+    <Alert>
+      <TicketIcon />
+      <AlertTitle>
+        {count} {count === 1 ? "key has" : "keys have"} no usage check code
+      </AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span>Users need a code to look up their own usage on the public check page.</span>
+        <Button size="sm" variant="outline" disabled={action.busy} onClick={() => action.submit({ intent: "codes" })}>
+          {action.busy ? "Adding…" : "Add codes"}
+        </Button>
+      </AlertDescription>
+    </Alert>
   );
 }
 

@@ -8,6 +8,7 @@ import { auth, authMode, requireAuth } from "./auth";
 import { configEndpoint } from "./config-endpoint";
 import { ConfigError, type AppEnv, type Bindings } from "./env";
 import { instance, lightsailErrorResponse } from "./instance";
+import { publicApi } from "./public";
 import { servers } from "./servers";
 
 const app = new Hono<AppEnv>().basePath("/api");
@@ -19,6 +20,8 @@ app.use(async (c, next) => {
   c.header("cache-control", "no-store");
 });
 app.route("/auth", auth);
+// The key usage check is for key holders, not admins, so it sits before sign-in.
+app.route("/public", publicApi);
 app.use(requireAuth);
 
 app.get("/me", (c) => c.json({ email: c.get("userEmail"), mode: authMode(c.env) }));

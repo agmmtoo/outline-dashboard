@@ -36,10 +36,12 @@ export type Payload =
   | { intent: "limit"; keyId: string; bytes: number | null }
   | { intent: "top-up" | "renew"; keyId: string; bytes: number }
   | { intent: "disable" | "enable" | "rotate" | "delete" | "dynamic"; keyId: string }
-  | { intent: "move"; keyId: string; to: string };
+  | { intent: "move"; keyId: string; to: string }
+  | { intent: "code"; keyId: string }
+  | { intent: "codes" };
 
 export type ActionResult =
-  | { ok: true; intent: Payload["intent"]; created?: CreatedKey[] }
+  | { ok: true; intent: Payload["intent"]; created?: CreatedKey[]; codes?: { updated: number; remaining: number } }
   | { ok: false; intent: Payload["intent"]; error: string };
 
 const SUCCESS: Record<Payload["intent"], string> = {
@@ -55,6 +57,8 @@ const SUCCESS: Record<Payload["intent"], string> = {
   delete: "Key deleted",
   dynamic: "Dynamic link updated",
   move: "Key moved",
+  code: "New check code issued",
+  codes: "Check codes added",
 };
 
 /** Runs one mutation against the API worker. Failures are returned, not thrown. */
@@ -98,6 +102,15 @@ export async function runAction(sid: string, payload: Payload): Promise<ActionRe
       case "dynamic":
         await api(`${key}/dynamic`, { method: "POST" });
         break;
+      case "code":
+        await api(`${key}/code`, { method: "POST" });
+        break;
+      case "codes":
+        return {
+          ok: true,
+          intent: payload.intent,
+          codes: await api<{ updated: number; remaining: number }>(`${base}/lookup-codes`, { method: "POST" }),
+        };
       case "move":
         return {
           ok: true,

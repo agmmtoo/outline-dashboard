@@ -68,21 +68,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Pages for key holders, not admins: no admin links or controls in the header. */
+const PUBLIC_PATHS = new Set(["/check"]);
+
 function Shell({ children }: { children: React.ReactNode }) {
+  const isPublic = PUBLIC_PATHS.has(useLocation().pathname);
+  const brand = (
+    <>
+      <span className="flex size-6 items-center justify-center bg-primary text-primary-foreground">
+        <ShieldCheckIcon className="size-3.5" />
+      </span>
+      {isPublic ? "Usage check" : "Outline Admin"}
+    </>
+  );
   return (
     <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex h-12 w-full max-w-7xl items-center gap-3 px-4">
-          <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <span className="flex size-6 items-center justify-center bg-primary text-primary-foreground">
-              <ShieldCheckIcon className="size-3.5" />
-            </span>
-            Outline Admin
-          </Link>
+          {isPublic ? (
+            <span className="flex items-center gap-2 text-sm font-semibold tracking-tight">{brand}</span>
+          ) : (
+            <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+              {brand}
+            </Link>
+          )}
           <div className="ml-auto flex items-center gap-1">
-            <RefreshButton />
+            {!isPublic && <RefreshButton />}
             <ThemeToggle />
-            <SignOutButton />
+            {!isPublic && <SignOutButton />}
           </div>
         </div>
       </header>
