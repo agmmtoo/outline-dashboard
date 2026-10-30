@@ -88,6 +88,15 @@ export const servers = new Hono<AppEnv>()
         keyCount: r.value.keys.length,
         usedBytes: r.value.keys.reduce((sum, k) => sum + k.usedBytes, 0),
         statusCounts,
+        // Already loaded for the counts above, so this costs no extra Outline calls.
+        keys: r.value.keys.map(({ id, label, usedBytes, effectiveLimitBytes, status, lastSeenMs }) => ({
+          id,
+          label,
+          usedBytes,
+          effectiveLimitBytes,
+          status,
+          lastSeenMs,
+        })),
       };
     });
     return c.json(summaries);

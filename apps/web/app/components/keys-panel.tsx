@@ -21,7 +21,7 @@ import { AccessLink, useCopy } from "./access-link";
 import { ConfirmDialog, type ConfirmRequest } from "./confirm-dialog";
 import { CreateKeyDialog } from "./create-key-dialog";
 import { KeySheet } from "./key-sheet";
-import { STATUS_ORDER, StatusBadge, StatusDot, statusDotClass, statusLabel, UsageBar } from "./status";
+import { STATUS_ORDER, StatusBadge, StatusDot, statusDotClass, statusLabel, UsageRing } from "./status";
 import { cn } from "~/lib/utils";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -250,7 +250,7 @@ export function KeysPanel({
                     <StatusBadge status={k.status} />
                   </TableCell>
                   <TableCell>
-                    <UsageBar used={k.usedBytes} limit={k.effectiveLimitBytes} />
+                    <UsageRing used={k.usedBytes} limit={k.effectiveLimitBytes} />
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
                     {k.lastSeenMs != null ? formatRelative(k.lastSeenMs) : "-"}

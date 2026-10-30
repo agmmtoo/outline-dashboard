@@ -6,7 +6,7 @@ import { parseGb, splitTags } from "~/lib/actions";
 import { maskAccessUrl, shareableLink, shareUrl } from "~/lib/browser";
 import { AccessLink } from "./access-link";
 import type { KeyActions } from "./keys-panel";
-import { StatusBadge, UsageBar } from "./status";
+import { StatusBadge, UsageRing } from "./status";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
@@ -131,7 +131,7 @@ function KeySheetBody({
               : "Outline counts usage over a rolling 30-day window and cannot reset it."
           }
         >
-          <UsageBar used={k.usedBytes} limit={k.effectiveLimitBytes} />
+          <UsageRing used={k.usedBytes} limit={k.effectiveLimitBytes} size="lg" />
           {k.disabled ? (
             <p className="text-xs text-muted-foreground">Enable the key to change its limit.</p>
           ) : (

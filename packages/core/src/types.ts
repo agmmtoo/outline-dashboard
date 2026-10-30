@@ -55,6 +55,9 @@ export interface InstanceStateView {
   checkedAt: number;
 }
 
+/** The few key fields the overview needs to draw each key. */
+export type KeyDot = Pick<KeyView, "id" | "label" | "usedBytes" | "effectiveLimitBytes" | "status" | "lastSeenMs">;
+
 export type ServerSummary =
   | {
       id: string;
@@ -64,6 +67,7 @@ export type ServerSummary =
       keyCount: number;
       usedBytes: number;
       statusCounts: Record<KeyStatus, number>;
+      keys: KeyDot[];
     }
   | { id: string; ok: false; label: string; error: string; instance: InstanceRef | null };
 

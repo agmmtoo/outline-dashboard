@@ -2,14 +2,19 @@ import { formatBytes } from "@outline-dash/core/format";
 import type { KeyStatus, ServerSummary } from "@outline-dash/core/types";
 import { ActivityIcon, ArrowUpRightIcon, KeyRoundIcon, ServerIcon, ServerOffIcon } from "lucide-react";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { Link } from "react-router";
 import { InstanceControl } from "~/components/instance-control";
-import { StatusBadge, StatusDot } from "~/components/status";
+import { STATUS_ORDER, StatusBadge, StatusDot, statusDotClass, statusLabel } from "~/components/status";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "~/components/ui/empty";
 import { queryClient, serversQuery } from "~/lib/query";
 import { cn } from "~/lib/utils";
+
+// Canvas code only loads on this page.
+const Constellation = lazy(() => import("~/components/constellation"));
 
 const ATTENTION: KeyStatus[] = ["over-limit", "near-limit", "expired", "disabled"];
 
@@ -58,6 +63,36 @@ export default function Overview() {
         <Stat icon={ActivityIcon} label="Traffic" value={formatBytes(used)} hint="Last 30 days" />
         <Stat icon={ArrowUpRightIcon} label="Avg per key" value={keys ? formatBytes(used / keys) : "-"} hint="Last 30 days" />
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Constellation</CardTitle>
+          <CardDescription>
+            Keys orbit their server. Dot size is traffic over the last 30 days; click a server to open it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Suspense fallback={<Skeleton className="h-80" />}>
+            <Constellation servers={servers} />
+          </Suspense>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+            {STATUS_ORDER.map((s) => (
+              <li key={s} className="flex items-center gap-1.5">
+                <StatusDot className={statusDotClass(s)} />
+                {statusLabel(s)}
+              </li>
+            ))}
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden className="size-2 rounded-full border-2 border-destructive" />
+              Server unreachable
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden className="size-2 rounded-full border-2 border-amber-500" />
+              Instance rebooting
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {servers.map((s) => (s.ok ? <ServerCard key={s.id} summary={s} /> : <DownCard key={s.id} summary={s} />))}
