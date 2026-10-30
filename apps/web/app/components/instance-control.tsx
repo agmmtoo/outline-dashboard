@@ -1,9 +1,10 @@
-import type { InstanceRef, InstanceStateView } from "@outline-dash/core/types";
+import type { InstanceRef } from "@outline-dash/core/types";
 import { PowerIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRevalidator } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError } from "~/lib/api";
+import { instanceQuery, queryKeys } from "~/lib/query";
 import { cn } from "~/lib/utils";
 import { ConfirmDialog, type ConfirmRequest } from "./confirm-dialog";
 import { StatusDot } from "./status";
@@ -24,8 +25,9 @@ function stateDot(state: string | null) {
 }
 
 /**
- * Lightsail instance state and a confirmed reboot action. State is fetched when
- * shown; after a reboot it is polled until the instance is running again.
+ * Lightsail instance state and a confirmed reboot action. State is cached per server
+ * and shared by every place the control is shown; after a reboot it is polled until
+ * the instance is running again.
  */
 export function InstanceControl({
   sid,
@@ -38,83 +40,47 @@ export function InstanceControl({
   serverName: string;
   prominent?: boolean;
 }) {
-  const [state, setState] = useState<string | null | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
   const [rebootingSince, setRebootingSince] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  const revalidator = useRevalidator();
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const client = useQueryClient();
 
-  const path = `/servers/${encodeURIComponent(sid)}/instance`;
+  const query = useQuery({
+    ...instanceQuery(sid),
+    // Interval refetches ignore staleTime, so polling sees every state change.
+    refetchInterval: rebootingSince == null ? false : POLL_MS,
+  });
+  const state = query.isPending ? undefined : query.isError ? null : query.data.state;
+  const error = query.error ? (query.error instanceof ApiError ? query.error.message : "Could not read instance state") : null;
 
-  const load = useCallback(async () => {
-    try {
-      const view = await api<InstanceStateView>(path);
-      setState(view.state);
-      setError(null);
-      return view.state;
-    } catch (err) {
-      setState(null);
-      setError(err instanceof ApiError ? err.message : "Could not read instance state");
-      return null;
-    }
-  }, [path]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Re-read the state whenever the page's Refresh (revalidation) finishes.
-  const revalidating = revalidator.state === "loading";
-  const wasRevalidating = useRef(false);
-  useEffect(() => {
-    if (wasRevalidating.current && !revalidating) void load();
-    wasRevalidating.current = revalidating;
-  }, [revalidating, load]);
-
-  // Poll while a reboot is in progress.
+  // Stop polling once the instance is back, or give up after POLL_MAX_MS.
   useEffect(() => {
     if (rebootingSince == null) return;
-    let cancelled = false;
-    const tick = async () => {
-      const current = await load();
-      if (cancelled) return;
-      const elapsed = Date.now() - rebootingSince;
-      if (current === "running" && elapsed >= MIN_REBOOT_MS) {
-        setRebootingSince(null);
-        toast.success(`${instance.name} is running again`);
-        void revalidator.revalidate();
-        return;
-      }
-      if (elapsed >= POLL_MAX_MS) {
-        setRebootingSince(null);
-        toast.warning(`${instance.name} is still "${current ?? "unknown"}". Check the Lightsail console.`);
-        return;
-      }
-      timer.current = setTimeout(tick, POLL_MS);
-    };
-    timer.current = setTimeout(tick, POLL_MS);
-    return () => {
-      cancelled = true;
-      if (timer.current) clearTimeout(timer.current);
-    };
-    // revalidator is left out on purpose: including it would restart the loop on every render.
-  }, [rebootingSince, load, instance.name]);
-
-  const reboot = async () => {
-    try {
-      await api(`${path}/reboot`, { method: "POST" });
-      toast.info(`Reboot requested for ${instance.name}. Users reconnect in about 1 to 2 minutes.`);
-      setState("rebooting");
-      setRebootingSince(Date.now());
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Reboot failed");
+    const elapsed = Date.now() - rebootingSince;
+    if (state === "running" && elapsed >= MIN_REBOOT_MS) {
+      setRebootingSince(null);
+      toast.success(`${instance.name} is running again`);
+      // Outline is back: refetch the server's data (and the overview) now.
+      void client.invalidateQueries({ queryKey: queryKeys.server(sid), exact: true });
+      void client.invalidateQueries({ queryKey: queryKeys.servers, exact: true });
+    } else if (elapsed >= POLL_MAX_MS) {
+      setRebootingSince(null);
+      toast.warning(`${instance.name} is still "${state ?? "unknown"}". Check the Lightsail console.`);
     }
-  };
+  }, [query.dataUpdatedAt, query.errorUpdatedAt, rebootingSince, state, instance.name, sid, client]);
+
+  const reboot = useMutation({
+    mutationFn: () => api(`/servers/${encodeURIComponent(sid)}/instance/reboot`, { method: "POST" }),
+    onSuccess: () => {
+      toast.info(`Reboot requested for ${instance.name}. Users reconnect in about 1 to 2 minutes.`);
+      client.setQueryData(queryKeys.instance(sid), (v) => (v ? { ...v, state: "rebooting" } : v));
+      setRebootingSince(Date.now());
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Reboot failed"),
+  });
 
   const busy = rebootingSince != null;
   const label = busy ? "rebooting" : state === undefined ? "checking" : (state ?? "unknown");
-  const canReboot = state === "running" && !busy;
+  const canReboot = state === "running" && !busy && !reboot.isPending;
 
   return (
     <div className="relative z-10 flex items-center gap-1.5">
@@ -143,7 +109,7 @@ export function InstanceControl({
             description: `This restarts the Lightsail instance behind "${serverName}". Everyone connected is dropped for about 1 to 2 minutes. Access keys and data are kept.`,
             action: "Reboot instance",
             destructive: true,
-            onConfirm: () => void reboot(),
+            onConfirm: () => reboot.mutate(),
           });
         }}
       >

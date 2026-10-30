@@ -1,5 +1,5 @@
 import { LogOutIcon, MonitorIcon, MoonIcon, RefreshCwIcon, ShieldCheckIcon, SunIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { QueryClientProvider, useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ThemeProvider, useTheme } from "next-themes";
 import {
   isRouteErrorResponse,
@@ -13,7 +13,6 @@ import {
   useLocation,
   useNavigate,
   useNavigation,
-  useRevalidator,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -30,6 +29,7 @@ import { Skeleton } from "./components/ui/skeleton";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { api, ApiError } from "./lib/api";
+import { authStatusQuery, queryClient } from "./lib/query";
 import { cn } from "./lib/utils";
 import "./app.css";
 
@@ -53,10 +53,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="min-h-svh antialiased">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <TooltipProvider>{children}</TooltipProvider>
-          <Toaster position="bottom-right" />
-        </ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <TooltipProvider>{children}</TooltipProvider>
+            <Toaster position="bottom-right" />
+          </ThemeProvider>
+        </QueryClientProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -87,12 +89,13 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Refetches what's on screen; cached data for other pages is only marked stale. */
 function RefreshButton() {
-  const revalidator = useRevalidator();
+  const client = useQueryClient();
   const navigation = useNavigation();
-  const busy = revalidator.state === "loading" || navigation.state === "loading";
+  const busy = useIsFetching({ predicate: (q) => q.queryKey[0] !== "auth" }) > 0 || navigation.state === "loading";
   return (
-    <Button variant="ghost" size="sm" onClick={() => revalidator.revalidate()} disabled={busy}>
+    <Button variant="ghost" size="sm" onClick={() => void client.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "auth" })} disabled={busy}>
       <RefreshCwIcon className={cn(busy && "animate-spin")} />
       <span className="hidden sm:inline">Refresh</span>
     </Button>
@@ -101,15 +104,11 @@ function RefreshButton() {
 
 /** Shown only with password sign-in (Access has its own logout). */
 function SignOutButton() {
-  const [mode, setMode] = useState<string | null>(null);
+  const { data } = useQuery(authStatusQuery());
+  const client = useQueryClient();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  useEffect(() => {
-    api<{ mode: string }>("/auth/status")
-      .then((s) => setMode(s.mode))
-      .catch(() => setMode(null));
-  }, []);
-  if (mode !== "password" || pathname === "/login") return null;
+  if (data?.mode !== "password" || pathname === "/login") return null;
   return (
     <Button
       variant="ghost"
@@ -117,6 +116,8 @@ function SignOutButton() {
       aria-label="Sign out"
       onClick={async () => {
         await api("/auth/logout", { method: "POST" }).catch(() => undefined);
+        // Don't leave server data in memory after signing out.
+        client.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
         navigate("/login");
       }}
     >

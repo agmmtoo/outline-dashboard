@@ -1,15 +1,15 @@
 import { formatBytes } from "@outline-dash/core/format";
 import type { KeyStatus, ServerSummary } from "@outline-dash/core/types";
 import { ActivityIcon, ArrowUpRightIcon, KeyRoundIcon, ServerIcon, ServerOffIcon } from "lucide-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { InstanceControl } from "~/components/instance-control";
 import { StatusBadge, StatusDot } from "~/components/status";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "~/components/ui/empty";
-import { api } from "~/lib/api";
+import { queryClient, serversQuery } from "~/lib/query";
 import { cn } from "~/lib/utils";
-import type { Route } from "./+types/overview";
 
 const ATTENTION: KeyStatus[] = ["over-limit", "near-limit", "expired", "disabled"];
 
@@ -18,11 +18,11 @@ export function meta() {
 }
 
 export async function clientLoader() {
-  return { servers: await api<ServerSummary[]>("/servers") };
+  await queryClient.ensureQueryData({ ...serversQuery(), revalidateIfStale: true });
 }
 
-export default function Overview({ loaderData }: Route.ComponentProps) {
-  const { servers } = loaderData;
+export default function Overview() {
+  const { data: servers } = useSuspenseQuery(serversQuery());
   const healthy = servers.filter((s) => s.ok);
   const down = servers.length - healthy.length;
   const keys = healthy.reduce((n, s) => n + s.keyCount, 0);

@@ -1,8 +1,9 @@
 import type { CreatedKeyView } from "@outline-dash/core/types";
-import { useEffect } from "react";
-import { useFetcher } from "react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "react-router";
 import { toast } from "sonner";
 import { api, ApiError } from "./api";
+import { queryKeys } from "./query";
 
 export type CreatedKey = CreatedKeyView;
 
@@ -54,7 +55,7 @@ const SUCCESS: Record<Payload["intent"], string> = {
   move: "Key moved",
 };
 
-/** Runs one mutation against the API worker. Used by the server route's clientAction. */
+/** Runs one mutation against the API worker. Failures are returned, not thrown. */
 export async function runAction(sid: string, payload: Payload): Promise<ActionResult> {
   const base = `/servers/${encodeURIComponent(sid)}`;
   const key = "keyId" in payload ? `${base}/keys/${encodeURIComponent(payload.keyId)}` : "";
@@ -110,25 +111,31 @@ export async function runAction(sid: string, payload: Payload): Promise<ActionRe
 }
 
 /**
- * A fetcher that posts a typed JSON payload to the current route's clientAction
- * and reports the outcome as a toast.
+ * Runs a mutation for the current server route, reports the outcome as a toast and
+ * refreshes only the cached data it affects. `busy` stays true until the server's
+ * data has been refetched, so the UI never shows the pre-mutation state as current.
  */
 export function useAction({ silentSuccess = false } = {}) {
-  const fetcher = useFetcher<ActionResult>();
-  const result = fetcher.data;
-
-  useEffect(() => {
-    if (!result || fetcher.state !== "idle") return;
-    if (!result.ok) toast.error(result.error);
-    else if (!silentSuccess) toast.success(SUCCESS[result.intent]);
-  }, [result, fetcher.state, silentSuccess]);
+  const { sid = "" } = useParams();
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (payload: Payload) => runAction(sid, payload),
+    onSuccess: async (result, payload) => {
+      if (!result.ok) return void toast.error(result.error);
+      if (!silentSuccess) toast.success(SUCCESS[result.intent]);
+      // The overview's counts are now out of date too, but it isn't on screen: mark it
+      // stale so it refetches on the next visit instead of now.
+      const later = { exact: true, refetchType: "none" } as const;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.servers, ...later });
+      if (payload.intent === "move") void queryClient.invalidateQueries({ queryKey: queryKeys.server(payload.to), ...later });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.server(sid), exact: true });
+    },
+  });
 
   return {
-    fetcher,
-    busy: fetcher.state !== "idle",
-    result,
-    submit: (payload: Payload) =>
-      fetcher.submit(JSON.stringify(payload), { method: "post", encType: "text/plain" }),
+    busy: mutation.isPending,
+    result: mutation.data,
+    submit: (payload: Payload) => mutation.mutate(payload),
   };
 }
 

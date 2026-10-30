@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Field, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { api, ApiError } from "~/lib/api";
+import { authStatusQuery, queryClient } from "~/lib/query";
 import type { Route } from "./+types/login";
 
 export function meta() {
@@ -18,7 +19,7 @@ function safeNext(url: URL) {
 }
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const { mode } = await api<{ mode: string }>("/auth/status");
+  const { mode } = await queryClient.ensureQueryData(authStatusQuery());
   // Access or local dev handles sign-in elsewhere; try the destination directly.
   if (mode !== "password") {
     try {
@@ -38,6 +39,8 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   } catch (err) {
     return { error: err instanceof ApiError ? err.message : "Sign-in failed" };
   }
+  // Drop anything cached from before the session expired.
+  queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
   return redirect(safeNext(new URL(request.url)));
 }
 

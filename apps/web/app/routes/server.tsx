@@ -1,5 +1,6 @@
 import { formatBytes } from "@outline-dash/core/format";
 import type { ServerKeysResponse } from "@outline-dash/core/types";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { InsightsPanel } from "~/components/insights-panel";
 import { InstanceControl } from "~/components/instance-control";
@@ -16,8 +17,7 @@ import {
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { runAction, type Payload } from "~/lib/actions";
-import { api } from "~/lib/api";
+import { queryClient, serverQuery } from "~/lib/query";
 import type { Route } from "./+types/server";
 
 const TABS = ["keys", "insights", "settings"] as const;
@@ -27,17 +27,16 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData?.server.name ?? "Server"} · Outline Admin` }];
 }
 
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  return api<ServerKeysResponse>(`/servers/${encodeURIComponent(params.sid)}`);
+/** Cached data renders immediately; stale data is refetched in the background. */
+export async function clientLoader({ params }: Route.ClientLoaderArgs): Promise<ServerKeysResponse> {
+  return queryClient.ensureQueryData({ ...serverQuery(params.sid), revalidateIfStale: true });
 }
 
-export async function clientAction({ params, request }: Route.ClientActionArgs) {
-  const payload = JSON.parse(await request.text()) as Payload;
-  return runAction(params.sid, payload);
-}
-
-export default function Server({ loaderData }: Route.ComponentProps) {
-  const { server, keys, insights, instance } = loaderData;
+export default function Server({ params: { sid } }: Route.ComponentProps) {
+  // The loader has filled the cache, so this never suspends; it keeps the page in
+  // sync with refetches after mutations and Refresh.
+  const { data } = useSuspenseQuery(serverQuery(sid));
+  const { server, keys, insights, instance } = data;
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.find((t) => t === params.get("tab")) ?? "keys";
   const used = keys.reduce((n, k) => n + k.usedBytes, 0);
@@ -73,7 +72,7 @@ export default function Server({ loaderData }: Route.ComponentProps) {
             <p className="text-xs text-muted-foreground">
               {keys.length} keys · {formatBytes(used)} in the last 30 days
             </p>
-            {instance && <InstanceControl sid={loaderData.id} instance={instance} serverName={server.name} />}
+            {instance && <InstanceControl sid={data.id} instance={instance} serverName={server.name} />}
           </div>
         </div>
       </div>
@@ -97,8 +96,8 @@ export default function Server({ loaderData }: Route.ComponentProps) {
           <KeysPanel
             server={server}
             keys={keys}
-            dynamicKeys={loaderData.dynamicKeys}
-            otherServers={loaderData.otherServers}
+            dynamicKeys={data.dynamicKeys}
+            otherServers={data.otherServers}
           />
         </TabsContent>
         <TabsContent value="insights" className="pt-2">
