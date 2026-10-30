@@ -335,8 +335,8 @@ function Tooltip({ hover, width }: { hover: NonNullable<Hover>; width: number })
             {hover.dot.key.effectiveLimitBytes != null
               ? ` of ${formatBytes(hover.dot.key.effectiveLimitBytes)}`
               : " · no limit"}
-            {" · seen "}
-            {formatRelative(hover.dot.key.lastSeenMs)}
+            {/* The overview loads without metrics, so last-seen is often unknown here. */}
+            {hover.dot.key.lastSeenMs != null && ` · seen ${formatRelative(hover.dot.key.lastSeenMs)}`}
           </div>
         </>
       ) : (

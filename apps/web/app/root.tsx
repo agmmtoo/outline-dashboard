@@ -16,6 +16,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { PendingBar } from "./components/pending-bar";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import {
@@ -57,6 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             <TooltipProvider>{children}</TooltipProvider>
             <Toaster position="bottom-right" />
+            <PendingBar />
           </ThemeProvider>
         </QueryClientProvider>
         <ScrollRestoration />

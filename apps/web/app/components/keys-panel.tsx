@@ -15,8 +15,9 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useAction, type CreatedKey } from "~/lib/actions";
+import { inverseOf, useAction, type CreatedKey, type Payload } from "~/lib/actions";
 import { shareableLink } from "~/lib/browser";
+import { usePendingActions } from "~/lib/pending";
 import { AccessLink, useCopy } from "./access-link";
 import { ConfirmDialog, type ConfirmRequest } from "./confirm-dialog";
 import { CreateKeyDialog } from "./create-key-dialog";
@@ -46,51 +47,71 @@ const QUICK_TOP_UP_GB = 10;
 
 export type KeyActions = ReturnType<typeof useKeyActions>;
 
-/** Shared by the table row menus and the key sheet, so results survive the sheet closing. */
+/**
+ * Shared by the table row menus and the key panel, so results survive the panel
+ * closing. `apply` is for changes that can be undone; the rest are held back for a
+ * few seconds after confirming so they can still be cancelled.
+ */
 function useKeyActions() {
   const action = useAction();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const later = (payload: Payload, title: string, keyId: string) => action.submit(payload, { grace: { title, keyId } });
 
   return {
     ...action,
     confirm,
     setConfirm,
-    rotate: (k: KeyView) =>
+    apply: (payload: Payload, k: KeyView) => action.submit(payload, { undo: inverseOf(payload, k) }),
+    // Callers that already show the consequences (the panel's danger zone) skip the dialog.
+    rotate: (k: KeyView, { ask = true } = {}) => {
+      const run = () => later({ intent: "rotate", keyId: k.id }, `Rotating "${k.label}"`, k.id);
+      if (!ask) return run();
       setConfirm({
         title: `Rotate "${k.label}"?`,
         description: k.dynamicHandle
           ? "A new key with a new password replaces this one. The dynamic link stays the same, so users reconnect without doing anything. The old static ss:// link stops working."
           : "A new key with the same name and limit replaces this one. The current link stops working immediately, so the user needs the new link.",
         action: "Rotate key",
-        onConfirm: () => action.submit({ intent: "rotate", keyId: k.id }),
-      }),
-    move: (k: KeyView, to: { id: string; name: string }) =>
+        onConfirm: run,
+      });
+    },
+    move: (k: KeyView, to: { id: string; name: string }, { ask = true } = {}) => {
+      const run = () => later({ intent: "move", keyId: k.id, to: to.id }, `Moving "${k.label}" to ${to.name}`, k.id);
+      if (!ask) return run();
       setConfirm({
         title: `Move "${k.label}" to ${to.name}?`,
         description: k.dynamicHandle
           ? `The key is recreated on ${to.name} and removed here. Its dynamic link keeps working; usage history starts fresh.`
           : `The key is recreated on ${to.name} and removed here. It has no dynamic link, so the user needs the new ss:// link. Usage history starts fresh.`,
         action: "Move key",
-        onConfirm: () => action.submit({ intent: "move", keyId: k.id, to: to.id }),
-      }),
-    resetDynamic: (k: KeyView) =>
-      k.dynamicHandle
-        ? setConfirm({
-            title: `Reset the dynamic link for "${k.label}"?`,
-            description: "A new dynamic link is issued and the current one stops working. Use this if the link leaked.",
-            action: "Reset link",
-            destructive: true,
-            onConfirm: () => action.submit({ intent: "dynamic", keyId: k.id }),
-          })
-        : action.submit({ intent: "dynamic", keyId: k.id }),
-    remove: (k: KeyView) =>
+        onConfirm: run,
+      });
+    },
+    resetDynamic: (k: KeyView, { ask = true } = {}) => {
+      // Creating a first dynamic link breaks nothing, so it runs straight away.
+      if (!k.dynamicHandle) return action.submit({ intent: "dynamic", keyId: k.id });
+      const run = () => later({ intent: "dynamic", keyId: k.id }, `Resetting the link for "${k.label}"`, k.id);
+      if (!ask) return run();
+      setConfirm({
+        title: `Reset the dynamic link for "${k.label}"?`,
+        description: "A new dynamic link is issued and the current one stops working. Use this if the link leaked.",
+        action: "Reset link",
+        destructive: true,
+        onConfirm: run,
+      });
+    },
+    remove: (k: KeyView, { ask = true } = {}) => {
+      const run = () => later({ intent: "delete", keyId: k.id }, `Deleting "${k.label}"`, k.id);
+      if (!ask) return run();
       setConfirm({
         title: `Delete "${k.label}"?`,
         description: "The key is removed from the server and its link stops working. This cannot be undone.",
         action: "Delete key",
         destructive: true,
-        onConfirm: () => action.submit({ intent: "delete", keyId: k.id }),
-      }),
+        confirmText: k.label,
+        onConfirm: run,
+      });
+    },
   };
 }
 
@@ -113,6 +134,7 @@ export function KeysPanel({
   const [replaced, setReplaced] = useState<{ title: string; key: CreatedKey } | null>(null);
   const actions = useKeyActions();
   const { copy } = useCopy();
+  const waiting = new Set(usePendingActions().map((a) => a.keyId));
 
   const { result, busy } = actions;
   useEffect(() => {
@@ -225,11 +247,20 @@ export function KeysPanel({
             </TableHeader>
             <TableBody>
               {visible.map((k) => (
-                <TableRow key={k.id} className="cursor-pointer" onClick={() => setSelectedId(k.id)}>
+                <TableRow
+                  key={k.id}
+                  className={cn("cursor-pointer", waiting.has(k.id) && "opacity-50")}
+                  onClick={() => setSelectedId(k.id)}
+                >
                   <TableCell className="pl-3">
                     <div className="flex items-center gap-1.5 font-medium">
                       <StatusDot className={cn(statusDotClass(k.status), "sm:hidden")} />
                       {k.label}
+                      {waiting.has(k.id) && (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-destructive">
+                          waiting
+                        </Badge>
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1 text-muted-foreground">
                       <span className="font-mono text-[11px]">#{k.id}</span>
@@ -342,19 +373,19 @@ function RowMenu({
         <DropdownMenuSeparator />
         {!k.disabled && k.effectiveLimitBytes != null && (
           <DropdownMenuItem
-            onClick={() => actions.submit({ intent: "top-up", keyId: k.id, bytes: gbToBytes(QUICK_TOP_UP_GB) })}
+            onClick={() => actions.apply({ intent: "top-up", keyId: k.id, bytes: gbToBytes(QUICK_TOP_UP_GB) }, k)}
           >
             <ZapIcon />
             Top up +{QUICK_TOP_UP_GB} GB
           </DropdownMenuItem>
         )}
         {k.disabled ? (
-          <DropdownMenuItem onClick={() => actions.submit({ intent: "enable", keyId: k.id })}>
+          <DropdownMenuItem onClick={() => actions.apply({ intent: "enable", keyId: k.id }, k)}>
             <PowerIcon />
             Enable
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onClick={() => actions.submit({ intent: "disable", keyId: k.id })}>
+          <DropdownMenuItem onClick={() => actions.apply({ intent: "disable", keyId: k.id }, k)}>
             <PowerOffIcon />
             Disable
           </DropdownMenuItem>

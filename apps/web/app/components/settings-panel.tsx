@@ -39,7 +39,16 @@ export function SettingsPanel({ server }: { server: ServerView }) {
 
         setFormError(null);
         if (Object.keys(body).length === 0) return void toast.info("Nothing changed");
-        action.submit({ intent: "settings", body });
+        // Undo puts back the previous value of each field that changed.
+        const previous: SettingsBody = {
+          name: server.name,
+          hostname: server.hostnameForAccessKeys,
+          port: server.portForNewAccessKeys,
+          metricsEnabled: server.metricsEnabled,
+          defaultLimitBytes: server.defaultLimitBytes,
+        };
+        const undo = Object.fromEntries(Object.keys(body).map((f) => [f, previous[f as keyof SettingsBody]]));
+        action.submit({ intent: "settings", body }, { undo: { intent: "settings", body: undo } });
       }}
     >
       <Card className="max-w-2xl">
