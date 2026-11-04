@@ -2,8 +2,11 @@ import { formatBytes } from "@outline-dash/core/format";
 import type { KeyCheckView, KeyStatus } from "@outline-dash/core/types";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowRightIcon, KeyRoundIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { StatusBadge } from "~/components/status";
+import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts";
+import { useState } from "react";
+import { reducedMotion, StatusBadge } from "~/components/status";
+import { ChartContainer, type ChartConfig } from "~/components/ui/chart";
+import { MAGNITUDE, usageColor } from "~/lib/chart-colors";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { api, ApiError } from "~/lib/api";
@@ -154,80 +157,44 @@ function Result({ k }: { k: KeyCheckView }) {
 }
 
 const SIZE = 220;
-const R = 92;
-const C = 2 * Math.PI * R;
-const SWEEP = 0.75; // a 270° arc, open at the bottom
+const gaugeConfig = { usage: { label: "Used", theme: MAGNITUDE } } satisfies ChartConfig;
 
-/** Big 270° gauge of data left. Fills on mount; holds still with reduced motion. */
+/** Big 270° gauge of data used (Recharts radial bar). Fills on mount; holds still with reduced motion. */
 function Gauge({ used, limit, off }: { used: number; limit: number | null; off: boolean }) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    // A timer rather than animation frames, so it also fills in background tabs.
-    const id = setTimeout(() => setShown(true), 50);
-    return () => clearTimeout(id);
-  }, []);
-
   const ratio = limit ? Math.min(1, used / Math.max(limit, 1)) : 0;
-  const tone = off
-    ? "stroke-muted-foreground"
-    : limit == null
-      ? "stroke-primary dark:stroke-teal-400"
-      : ratio >= 1
-        ? "stroke-destructive"
-        : ratio >= 0.8
-          ? "stroke-amber-500"
-          : "stroke-primary dark:stroke-teal-400";
-  const arc = SWEEP * C;
-  // The arc shows what's used; with no limit it's a calm full ring.
-  const filled = limit == null ? arc : arc * ratio;
+  // The arc shows what's used; with no limit it's a calm, faded full arc.
+  const value = limit == null ? 100 : ratio * 100;
   const left = limit == null ? null : Math.max(0, limit - used);
+  const color = limit == null && !off ? "var(--color-usage)" : usageColor(ratio, limit, off);
 
   return (
     <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="size-full rotate-[135deg]" aria-hidden>
-        {/* Ticks every 10% */}
-        {Array.from({ length: 11 }, (_, i) => {
-          const a = (i / 10) * SWEEP * 2 * Math.PI;
-          const r1 = R + 12;
-          const r2 = R + (i % 5 === 0 ? 18 : 15);
-          return (
-            <line
-              key={i}
-              x1={SIZE / 2 + r1 * Math.cos(a)}
-              y1={SIZE / 2 + r1 * Math.sin(a)}
-              x2={SIZE / 2 + r2 * Math.cos(a)}
-              y2={SIZE / 2 + r2 * Math.sin(a)}
-              className="stroke-muted-foreground/40"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            />
-          );
-        })}
-        <circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={R}
-          fill="none"
-          strokeWidth={14}
-          strokeLinecap="round"
-          strokeDasharray={`${arc} ${C}`}
-          className="stroke-muted"
-        />
-        <circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={R}
-          fill="none"
-          strokeWidth={14}
-          strokeLinecap="round"
-          strokeDasharray={`${shown ? filled : 0} ${C}`}
-          className={cn(
-            tone,
-            limit == null && "opacity-40",
-            "transition-[stroke-dasharray] duration-1000 ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none",
-          )}
-        />
-      </svg>
+      <ChartContainer
+        config={gaugeConfig}
+        className={cn("aspect-square size-full", limit == null && "[&_.recharts-radial-bar-sector]:opacity-40")}
+        initialDimension={{ width: SIZE, height: SIZE }}
+        aria-hidden
+      >
+        <RadialBarChart
+          data={[{ value }]}
+          startAngle={225}
+          endAngle={-45}
+          innerRadius={SIZE / 2 - 32}
+          outerRadius={SIZE / 2 - 18}
+          barSize={14}
+          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+        >
+          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} />
+          <RadialBar
+            dataKey="value"
+            background
+            cornerRadius={7}
+            fill={color}
+            animationDuration={1000}
+            isAnimationActive={!reducedMotion()}
+          />
+        </RadialBarChart>
+      </ChartContainer>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <span className="text-[11px] tracking-wide text-muted-foreground uppercase">{left == null ? "Data" : "Left"}</span>
         <span className="text-3xl font-semibold tracking-tight tabular-nums">{left == null ? "∞" : formatBytes(left)}</span>

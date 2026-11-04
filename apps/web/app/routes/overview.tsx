@@ -5,6 +5,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { Link } from "react-router";
 import { InstanceControl } from "~/components/instance-control";
+import { OverviewCharts } from "~/components/overview-charts";
 import { STATUS_ORDER, StatusBadge, StatusDot, statusDotClass, statusLabel } from "~/components/status";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
@@ -63,6 +64,8 @@ export default function Overview() {
         <Stat icon={ActivityIcon} label="Traffic" value={formatBytes(used)} hint="Last 30 days" />
         <Stat icon={ArrowUpRightIcon} label="Avg per key" value={keys ? formatBytes(used / keys) : "-"} hint="Last 30 days" />
       </section>
+
+      <OverviewCharts servers={servers} />
 
       <Card>
         <CardHeader>

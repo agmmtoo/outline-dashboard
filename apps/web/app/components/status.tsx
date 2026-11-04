@@ -1,8 +1,11 @@
 import { formatBytes } from "@outline-dash/core/format";
 import type { KeyStatus } from "@outline-dash/core/types";
 import { useEffect, useRef, useState } from "react";
+import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts";
+import { MAGNITUDE, usageColor } from "~/lib/chart-colors";
 import { cn } from "~/lib/utils";
 import { Badge } from "./ui/badge";
+import { ChartContainer, type ChartConfig } from "./ui/chart";
 
 const STATUS_META: Record<KeyStatus, { label: string; dot: string }> = {
   active: { label: "Active", dot: "bg-emerald-500" },
@@ -38,24 +41,6 @@ export function StatusBadge({ status, count }: { status: KeyStatus; count?: numb
   );
 }
 
-/** Status colors for SVG fills, as literal classes so Tailwind picks them up. */
-export const STATUS_FILL: Record<KeyStatus, string> = {
-  active: "fill-emerald-500",
-  "near-limit": "fill-amber-500",
-  "over-limit": "fill-red-500",
-  idle: "fill-muted-foreground/50",
-  expired: "fill-orange-500",
-  disabled: "fill-muted-foreground",
-};
-
-function usageTone(ratio: number, limit: number | null) {
-  if (!limit) return "stroke-muted-foreground/40";
-  if (ratio >= 1) return "stroke-destructive";
-  if (ratio >= 0.8) return "stroke-amber-500";
-  // Dark mode's primary is too deep to read against the track.
-  return "stroke-primary dark:stroke-teal-400";
-}
-
 /** Counts up to `to` on mount, then from the last value when it changes (instant with reduced motion). */
 function useCountUp(to: number, ms = 900) {
   const [value, setValue] = useState(0);
@@ -76,9 +61,12 @@ function useCountUp(to: number, ms = 900) {
   return value;
 }
 
+const ringConfig = { usage: { label: "Used", theme: MAGNITUDE } } satisfies ChartConfig;
+
 /**
- * Usage against the key's limit as a ring that fills on mount. Turns amber at 80%
- * and red at 100%; a key without a limit shows an empty ring and "No limit".
+ * Usage against the key's limit as a ring (Recharts radial bar) that fills on mount.
+ * Turns amber at 80% and red at 100%; a key without a limit shows an empty ring and
+ * "No limit".
  */
 export function UsageRing({
   used,
@@ -94,45 +82,41 @@ export function UsageRing({
   const ratio = limit ? used / Math.max(limit, 1) : 0;
   const pct = limit ? Math.round(ratio * 100) : null;
   const shown = useCountUp(pct ?? 0);
-  const [filled, setFilled] = useState(false);
-  useEffect(() => {
-    // Two frames so the empty ring paints first and the fill transitions in.
-    let inner = 0;
-    const outer = requestAnimationFrame(() => (inner = requestAnimationFrame(() => setFilled(true))));
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
-  }, []);
 
   const lg = size === "lg";
   const box = lg ? 56 : 32;
   const stroke = lg ? 5 : 3.5;
-  const r = (box - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const offset = filled ? c * (1 - Math.min(1, ratio)) : c;
   const label = limit == null ? `${formatBytes(used)} used, no limit` : `${formatBytes(used)} of ${formatBytes(limit)} used (${pct}%)`;
 
   return (
     <div className={cn("flex min-w-28 items-center gap-2.5 sm:min-w-36", className)} role="img" aria-label={label}>
       <div className="relative shrink-0" style={{ width: box, height: box }}>
-        <svg viewBox={`0 0 ${box} ${box}`} className="-rotate-90" aria-hidden>
-          <circle cx={box / 2} cy={box / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-muted" />
-          <circle
-            cx={box / 2}
-            cy={box / 2}
-            r={r}
-            fill="none"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={offset}
-            className={cn(
-              "transition-[stroke-dashoffset] duration-900 ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none",
-              usageTone(ratio, limit),
-            )}
-          />
-        </svg>
+        <ChartContainer
+          config={ringConfig}
+          className="aspect-square size-full"
+          initialDimension={{ width: box, height: box }}
+          aria-hidden
+        >
+          <RadialBarChart
+            data={[{ value: Math.min(100, ratio * 100) }]}
+            startAngle={90}
+            endAngle={-270}
+            innerRadius={box / 2 - stroke}
+            outerRadius={box / 2}
+            barSize={stroke}
+            margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+          >
+            <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} />
+            <RadialBar
+              dataKey="value"
+              background
+              cornerRadius={stroke}
+              fill={usageColor(ratio, limit)}
+              animationDuration={900}
+              isAnimationActive={!reducedMotion()}
+            />
+          </RadialBarChart>
+        </ChartContainer>
         {lg && (
           <span className="absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
             {pct == null ? "∞" : `${shown}%`}
@@ -147,4 +131,8 @@ export function UsageRing({
       </div>
     </div>
   );
+}
+
+export function reducedMotion() {
+  return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
